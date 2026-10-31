@@ -2,13 +2,26 @@ import SwiftUI
 import WebKit
 
 /// 全屏 WKWebView，加载打包在 App 内的 index.html
-/// 用自定义 scheme（app://）而不是 file://，这样 localStorage 才有正常的 origin，数据能持久保存
+/// 用自定义 scheme（app://）而不是 file://，这样页面有正常 origin
+/// 数据不依赖 localStorage（WKWebView 写盘是异步的，App 被杀会丢），
+/// 而是启动时把原生文件内容注入 window.__NATIVE_DB__，改动通过 messageHandler 同步写回文件
 struct ContentView: UIViewRepresentable {
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIView(context: Context) -> WKWebView {
         let conf = WKWebViewConfiguration()
         conf.setURLSchemeHandler(AssetHandler(), forURLScheme: "app")
         conf.allowsInlineMediaPlayback = true
         conf.mediaTypesRequiringUserActionForPlayback = []
+
+        let uc = WKUserContentController()
+        uc.add(context.coordinator, name: "save")
+        let stored = DataStore.shared.readString()
+        let js = "window.__NATIVE_DB__ = \(Self.jsLiteral(stored));"
+        uc.addUserScript(WKUserScript(source: js,
+                                      injectionTime: .atDocumentStart,
+                                      forMainFrameOnly: true))
+        conf.userContentController = uc
 
         let wv = WKWebView(frame: .zero, configuration: conf)
         wv.isOpaque = false
@@ -25,6 +38,21 @@ struct ContentView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
+
+    /// 把任意字符串安全地转成 JS 字符串字面量
+    static func jsLiteral(_ s: String) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: [s]),
+              let arr = String(data: data, encoding: .utf8) else { return "\"\"" }
+        return String(arr.dropFirst().dropLast())   // ["x"] -> "x"
+    }
+
+    final class Coordinator: NSObject, WKScriptMessageHandler {
+        func userContentController(_ uc: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            guard message.name == "save", let json = message.body as? String else { return }
+            DataStore.shared.write(json)
+        }
+    }
 }
 
 /// 从 App bundle 读文件，喂给 app:// 请求

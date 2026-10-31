@@ -553,7 +553,14 @@ function nuid() { return Date.now().toString(36) + Math.random().toString(36).sl
 
 async function getDb() {
   if (_db) return _db;
-  let db = lsGet();
+  let db = null;
+  /* App 内优先用原生文件（Swift 注入，同步读，绝不会读到旧值） */
+  const native = window.__NATIVE_DB__;
+  if (native && native.length > 2) {
+    try { db = JSON.parse(native); } catch (e) { db = null; }
+  }
+  /* 其次才是 localStorage（电脑浏览器 / 首次从旧版升级） */
+  if (!db || !Array.isArray(db.accounts)) db = lsGet();
   if (!db || !Array.isArray(db.accounts)) {
     try {
       const r = await fetch('seed.json', { cache: 'no-store' });
@@ -572,12 +579,29 @@ async function getDb() {
     db.devices = db.devices || [];
     db.statuses = db.statuses || [];
     db.groupColors = db.groupColors || {};
-    lsPut(db);
   }
   _db = db;
+  /* 注意：这里不能再回写存储！读操作写盘会用旧数据覆盖新数据 */
   return db;
 }
-function commit(db) { _db = db; lsPut(db); }
+
+function nativeSave(json) {
+  try {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.save) {
+      window.webkit.messageHandlers.save.postMessage(json);
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+function commit(db) {
+  _db = db;
+  const json = JSON.stringify(db);
+  const ok = nativeSave(json);   // App 内：写原生文件（同步落盘）
+  try { lsPut(db); } catch (e) {} // 兜底
+  if (ok) window.__NATIVE_DB__ = json; // 让内存副本同步，避免回读旧数据
+}
 
 async function localApi(path, opt) {
   const db = await getDb();
@@ -857,7 +881,7 @@ async function importFromPC() {
     const r = await fetch('http://' + host + '/api/state?t=' + Date.now(), { cache: 'no-store' });
     const d = await r.json();
     if (!Array.isArray(d.accounts)) throw new Error('format');
-    _db = d; lsPut(d);
+    commit(d);
     S.logs = d.logs || [];
     render();
     toast('导入成功，共 ' + d.accounts.length + ' 个账号');
