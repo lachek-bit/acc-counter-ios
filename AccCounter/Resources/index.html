@@ -560,16 +560,17 @@ function lsGet() {
 function lsPut(db) { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
 function nuid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
+/* 单一数据源：每次从原生注入 / localStorage 重新解析，绝不做内存缓存
+   （之前用 _db 缓存 + UI 预改对象，导致增量算两遍、日志前后值对不上） */
+function dbRaw() {
+  if (window.__NATIVE_DB__ && window.__NATIVE_DB__.length > 2) return window.__NATIVE_DB__;
+  try { return localStorage.getItem(LS_KEY) || ''; } catch (e) { return ''; }
+}
+
 async function getDb() {
-  if (_db) return _db;
   let db = null;
-  /* App 内优先用原生文件（Swift 注入，同步读，绝不会读到旧值） */
-  const native = window.__NATIVE_DB__;
-  if (native && native.length > 2) {
-    try { db = JSON.parse(native); } catch (e) { db = null; }
-  }
-  /* 其次才是 localStorage（电脑浏览器 / 首次从旧版升级） */
-  if (!db || !Array.isArray(db.accounts)) db = lsGet();
+  const raw = dbRaw();
+  if (raw) { try { db = JSON.parse(raw); } catch (e) { db = null; } }
   if (!db || !Array.isArray(db.accounts)) {
     try {
       const r = await fetch('seed.json', { cache: 'no-store' });
@@ -588,9 +589,8 @@ async function getDb() {
     db.devices = db.devices || [];
     db.statuses = db.statuses || [];
     db.groupColors = db.groupColors || {};
+    commit(db);
   }
-  _db = db;
-  /* 注意：这里不能再回写存储！读操作写盘会用旧数据覆盖新数据 */
   return db;
 }
 
@@ -605,11 +605,10 @@ function nativeSave(json) {
 }
 
 function commit(db) {
-  _db = db;
   const json = JSON.stringify(db);
-  const ok = nativeSave(json);   // App 内：写原生文件（同步落盘）
-  try { lsPut(db); } catch (e) {} // 兜底
-  if (ok) window.__NATIVE_DB__ = json; // 让内存副本同步，避免回读旧数据
+  window.__NATIVE_DB__ = json;   // 立刻更新唯一数据源，后续读取都以它为准
+  nativeSave(json);              // App 内同步写原生文件
+  try { lsPut(db); } catch (e) {}
 }
 
 async function localApi(path, opt) {
@@ -753,15 +752,18 @@ async function localApi(path, opt) {
     }
     if (method === 'POST' && parts[3] === 'adjust') {
       const field = b.field === 'silver' ? 'silver' : 'gold';
-      const delta = Number(b.delta) || 0;
       const acc = db.accounts[idx];
       const before = Number(acc[field]) || 0;
-      acc[field] = Math.max(0, before + delta);
+      /* 有 value 就直接赋绝对值（前端传），没有才按 delta 累加 */
+      const target = (b.value !== undefined && b.value !== null)
+        ? Math.max(0, Number(b.value) || 0)
+        : Math.max(0, before + (Number(b.delta) || 0));
+      acc[field] = target;
       acc.updated = now;
-      log({ aid: acc.id, name: acc.name || acc.login, field, delta: acc[field] - before,
-        before, after: acc[field] });
+      log({ aid: acc.id, name: acc.name || acc.login, field,
+        delta: target - before, before, after: target });
       commit(db);
-      return acc;
+      return { ok: true, accounts: db.accounts, account: acc };
     }
   }
   return { error: 'bad api' };
@@ -1107,9 +1109,8 @@ async function editField(a, field, name) {
   const cur = field === 'pwd' ? (a.pwd || '') : (a.login || '');
   const v = await askText('修改' + name, cur, '新的' + name);
   if (v === null || v === cur) return;
-  a[field] = v;
   await api('/api/accounts/' + a.id, { method: 'PUT', body: JSON.stringify({ [field]: v }) });
-  renderRows();
+  await reload();
   toast(name + '已修改');
 }
 
@@ -1198,10 +1199,9 @@ function renderStOpts() {
       const a = ST_A; if (!a) return;
       closeStatus();
       if (a.status === s.k) return;
-      a.status = s.k; paintStatus(a); paintHead();
       await api('/api/accounts/' + a.id, { method: 'PUT', body: JSON.stringify({ status: s.k }) });
+      await reload();
       toast('状态已改为 ' + s.name);
-      if (curTab !== 'stat') render();
     };
     box.appendChild(b);
   });
@@ -1228,9 +1228,12 @@ async function saveKp() {
   const old = Number(a ? a[field] : 0) || 0;
   closeKeypad();
   if (!a || v === old) return;
-  a[field] = v;
-  paintRow(a); paintHead();
-  await api('/api/accounts/' + a.id + '/adjust', { method: 'POST', body: JSON.stringify({ field, delta: v - old }) });
+  const r = await api('/api/accounts/' + a.id + '/adjust', {
+    method: 'POST',
+    body: JSON.stringify({ field, delta: v - old, value: v })
+  });
+  if (r && r.error) return toast(r.error);
+  await reload();
   toast((field === 'gold' ? '金' : '银') + '已改为 ' + v);
   refreshLogs();
 }
