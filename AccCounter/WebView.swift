@@ -39,7 +39,7 @@ final class AssetHandler: NSObject, WKURLSchemeHandler {
         let name = nsPath.deletingPathExtension
         let ext = nsPath.pathExtension
 
-        guard let file = Bundle.main.path(forResource: name, ofExtension: ext) else {
+        guard let file = Bundle.main.path(forResource: name, ofType: ext) else {
             task.didFailWithError(NSError(domain: "app", code: 404,
                                           userInfo: [NSLocalizedDescriptionKey: "not found: \(path)"]))
             return
