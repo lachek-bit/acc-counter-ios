@@ -13,6 +13,8 @@ jobs:
   build:
     runs-on: macos-14
     timeout-minutes: 40
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -98,6 +100,21 @@ jobs:
           name: AccCounter-unsigned-ipa
           path: AccCounter-unsigned.ipa
           if-no-files-found: error
+
+      # 同时发到 Release，这样不用登录就能直接下载
+      - name: Publish to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: acc-v${{ github.run_number }}
+          name: 账号计数器 v${{ github.run_number }}
+          body: |
+            账号计数器 iOS 未签名包
+            构建号 ${{ github.run_number }} · ${{ github.sha }}
+          files: AccCounter-unsigned.ipa
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload build log (on failure)
         if: failure()
