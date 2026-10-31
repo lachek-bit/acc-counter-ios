@@ -1,0 +1,1667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>账号计数器</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  body{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+  :root{
+    --bg:#F5F6F8; --card:#fff; --line:#EEF0F3; --line2:#E4E7EC;
+    --t1:#101828; --t2:#667085; --t3:#98A2B3;
+    --gold:#C77414; --gold-bg:#FDF6EC; --gold-line:#F5E2C8;
+    --silver:#2A62D9; --silver-bg:#EEF4FE; --silver-line:#D5E3FB;
+    --green:#0B9D6B; --green-bg:#E8F7F1;
+    --orange:#C2410C;
+  }
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--t1);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;font-size:15px;overflow-x:hidden;
+    letter-spacing:.1px}
+  body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+  .app{max-width:520px;margin:0 auto;min-height:100vh;background:var(--bg)}
+
+  /* ---------- 顶部 ---------- */
+  header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);
+    backdrop-filter:saturate(180%) blur(14px);border-bottom:1px solid var(--line)}
+  .hd-row{display:flex;align-items:center;padding:12px 16px 9px;gap:8px}
+  .hd-title{font-size:18px;font-weight:800;letter-spacing:.2px;line-height:1.15}
+  .hd-sub{font-size:12px;color:var(--t3);margin-top:3px;font-variant-numeric:tabular-nums}
+  .hd-sub b{font-weight:700}
+  .hd-sub b.g1{color:var(--gold)}
+  .hd-sub b.g2{color:var(--silver)}
+  .hd-r{display:flex;gap:7px;margin-left:auto}
+  .qbtn{border:0;border-radius:11px;padding:0 11px;height:34px;font-size:12.5px;font-weight:700;
+    font-family:inherit;display:flex;align-items:center;gap:4px;line-height:1;letter-spacing:.2px}
+  .qbtn i{font-style:normal;font-size:10px;font-weight:600;opacity:.65}
+  .qbtn.gold{background:var(--gold-bg);color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold-line)}
+  .qbtn.silver{background:var(--silver-bg);color:var(--silver);box-shadow:inset 0 0 0 1px var(--silver-line)}
+  .qbtn.swap{background:#F2F4F7;color:var(--t2);box-shadow:inset 0 0 0 1px #E4E7EC}
+  .qbtn.swap.on{background:#101828;color:#fff;box-shadow:none}
+  .qbtn:active{transform:scale(.96)}
+
+  /* 交换模式：选中态用 outline（不会被行内染色盖掉） */
+  .row.swapable{outline:1.5px dashed #C4CAD4;outline-offset:-4px}
+  .row.dimmed{opacity:.38;filter:saturate(.5)}
+  .row.sel-from{outline:3px solid #2A62D9;outline-offset:-3px;z-index:2;
+    box-shadow:0 6px 18px -6px rgba(42,98,217,.45)!important}
+  .row.sel-to{outline:3px solid #0B9D6B;outline-offset:-3px;z-index:2;
+    box-shadow:0 6px 18px -6px rgba(11,157,107,.45)!important}
+  .row.sel-from::after,.row.sel-to::after{position:absolute;top:0;right:0;font-size:10px;
+    font-weight:700;color:#fff;padding:3px 8px;border-radius:0 14px 0 9px;line-height:1.5;
+    letter-spacing:.5px}
+  .row.sel-from::after{content:'转出';background:#2A62D9}
+  .row.sel-to::after{content:'转入';background:#0B9D6B}
+
+  .chips{display:flex;gap:7px;overflow-x:auto;padding:0 16px 11px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;font-size:12.5px;color:var(--t2);background:#fff;border:1px solid var(--line2);
+    padding:6px 12px;border-radius:20px;white-space:nowrap;font-family:inherit;font-weight:500}
+  .chip.on{background:var(--t1);color:#fff;border-color:var(--t1);font-weight:600}
+
+  /* ---------- 卡片网格（一行两个，账号独占整行） ---------- */
+  .rows{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 10px 110px;
+    align-content:start}
+  .row{position:relative;background:#fff;border-radius:16px;height:120px;padding:11px 12px 10px;
+    display:flex;flex-direction:column;overflow:hidden;
+    box-shadow:0 1px 2px rgba(16,24,40,.05),0 6px 16px -12px rgba(16,24,40,.18)}
+  .row:active{background:#FCFCFD}
+
+  .cr-top{display:flex;align-items:center;justify-content:space-between;gap:6px;height:27px;
+    flex:0 0 auto}
+  .cr-top-l{display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden}
+  .cr-st{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;line-height:1;
+    overflow:hidden;white-space:nowrap;flex:0 0 auto}
+  .cr-st .dot{width:6px;height:6px;border-radius:3px;background:currentColor;flex:0 0 auto}
+  .cr-st.farm{color:var(--green)}
+  .cr-st.selling{color:#C2410C}
+  .cr-st.idle{color:var(--t3);font-weight:500}
+  .cr-st.idle .dot{background:#D0D5DD}
+
+  .cr-login{font-size:15px;font-weight:700;line-height:1.3;letter-spacing:-.2px;margin-top:3px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 0 auto}
+  .cr-login.empty{color:var(--t2);font-weight:500}
+
+  .cr-bottom{display:flex;gap:8px;margin-top:auto;align-items:flex-end;flex:0 0 auto}
+  .cr-info{flex:1;min-width:0;padding-bottom:2px}
+  .cr-name{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t2);font-weight:600;
+    overflow:hidden;white-space:nowrap;line-height:1.25;height:16px}
+  .cr-name .nm2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .g{font-size:10px;padding:1px 5px;border-radius:5px;font-weight:600;white-space:nowrap;
+    flex:0 0 auto;line-height:1.4}
+  .cr-remark{font-size:11px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;line-height:1.25;height:15px;margin-top:2px}
+
+  .cpy{display:flex;gap:5px;flex:0 0 auto;margin-top:-1px}
+  .cp{width:27px;height:27px;border-radius:8px;border:0;background:#F4F5F7;color:var(--t2);
+    font-size:14px;font-weight:700;font-family:inherit;line-height:1;padding:0;letter-spacing:0;
+    display:flex;align-items:center;justify-content:center;
+    user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+  .cp:active{background:#E7EAEF;transform:scale(.92)}
+  .cp.miss{background:#FDF0F0;color:#D48A8A}
+
+  .cr-nums{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+  .num{display:flex;align-items:baseline;justify-content:flex-end;gap:3px;padding:0 2px;
+    border-radius:4px}
+  .num b{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.3px;
+    line-height:1.2}
+  .num i{font-size:9px;font-style:normal;font-weight:600;opacity:.5;line-height:1}
+  .num.gold{color:var(--gold)}
+  .num.silver{color:var(--silver)}
+  .num:active{background:#F7F8FA}
+
+  .r-n{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;height:72px;
+    gap:2px}
+  .r-n b{font-size:17.5px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;
+    letter-spacing:-.2px}
+  .r-n i{font-size:9.5px;font-style:normal;font-weight:600;line-height:1;opacity:.62;letter-spacing:1px}
+  .r-n.gold{color:var(--gold)}
+  .r-n.silver{color:var(--silver)}
+  .r-n:active{opacity:.65}
+  .r-st{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:4px;
+    font-size:11px;font-weight:600;line-height:1;height:72px;letter-spacing:0}
+  .r-st .dot{width:5px;height:5px;border-radius:3px;background:currentColor;flex:0 0 auto}
+  .r-st.farm{color:var(--green)}
+  .r-st.selling{color:#C2410C}
+  .r-st.idle{color:var(--t3);font-weight:500}
+  .r-st.idle .dot{background:#D0D5DD}
+  .r-st:active{opacity:.6}
+
+  .empty-box{text-align:center;color:var(--t3);font-size:13px;padding:50px 0}
+  .empty-box .import-btn{margin-top:14px;border:0;border-radius:11px;background:#101828;color:#fff;
+    font-size:13.5px;font-weight:600;font-family:inherit;padding:11px 22px}
+  .empty-box .import-btn:active{transform:scale(.96)}
+  .empty-box .empty-tip{font-size:11px;color:#B0B8C5;margin-top:10px}
+
+  /* ---------- 底部按钮栏 ---------- */
+  .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#FBFCFD;
+    border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+  .tabbar .inner{display:flex;width:100%;max-width:520px;margin:0 auto;gap:7px;padding:8px 10px}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    background:#F1F3F6;border-radius:12px;padding:7px 0 6px;font-size:11px;font-weight:600;
+    color:var(--t2);font-family:inherit;transition:.15s;border:0}
+  .tab .ic{display:block;width:19px;height:19px;opacity:.5}
+  .tab .ic svg{width:19px;height:19px;display:block}
+  .tab.on{background:#fff;color:var(--t1);box-shadow:inset 0 0 0 1.5px #101828}
+  .tab.on .ic{opacity:1}
+  .tab.add{background:#101828;color:#fff}
+  .tab.add .ic{opacity:1}
+  .tab:active{transform:scale(.97)}
+
+  .fab{position:fixed;right:14px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:25;
+    width:52px;height:52px;border-radius:26px;border:0;background:#141821;color:#fff;
+    font-size:27px;line-height:1;font-weight:300;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 6px 18px -4px rgba(20,24,33,.45);font-family:inherit}
+  .fab:active{transform:scale(.93)}
+
+  /* ---------- 统计 ---------- */
+  .stat-sum{display:flex;gap:9px;margin-bottom:10px}
+  .ss-item{flex:1;background:#fff;border-radius:14px;padding:12px 12px 10px;
+    box-shadow:0 1px 2px rgba(16,24,40,.05),0 6px 16px -14px rgba(16,24,40,.2)}
+  .ss-item b{display:block;font-size:21px;font-weight:700;font-variant-numeric:tabular-nums;
+    letter-spacing:-.5px;line-height:1.2}
+  .ss-item span{font-size:11px;color:var(--t3)}
+  .ss-item.gold b{color:var(--gold)}
+  .ss-item.silver b{color:var(--silver)}
+  .stat-card{background:#fff;border-radius:16px;padding:14px 15px;margin-bottom:10px;
+    box-shadow:0 1px 2px rgba(16,24,40,.05),0 6px 16px -14px rgba(16,24,40,.2)}
+  .stat-title{font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:baseline;gap:6px}
+  .stat-title i{font-style:normal;font-size:11px;color:var(--t3);font-weight:500}
+  .stat-title .clr{margin-left:auto;font-size:11px;font-weight:500;color:var(--t3);
+    border:1px solid var(--line2);background:#fff;padding:3px 10px;border-radius:8px;
+    font-family:inherit;line-height:1.4}
+  .stat-title .clr.armed{color:#C81E1E;border-color:#F8C9C9;background:#FFF6F6;font-weight:600}
+  .stat-title .clr:active{transform:scale(.96)}
+  .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;font-size:12.5px}
+  .bar-row:last-child{margin-bottom:0}
+  .bar-row .rk{width:13px;font-size:10px;color:var(--t3);font-weight:700;flex:0 0 auto}
+  .bar-row .nm{width:94px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;flex:0 0 auto;font-size:12px}
+  .bar-row .track{flex:1;height:8px;background:#F2F4F7;border-radius:5px;overflow:hidden}
+  .bar-row .fill{height:100%;border-radius:5px;background:linear-gradient(90deg,#F2BB63,#C77414)}
+  .bar-row .fill.s{background:linear-gradient(90deg,#6E9BF5,#2A62D9)}
+  .bar-row .fill.st-farm{background:linear-gradient(90deg,#5FD3A6,#0B9D6B)}
+  .bar-row .fill.st-selling{background:linear-gradient(90deg,#F5A66A,#C2410C)}
+  .bar-row .fill.st-idle{background:#C4CAD4}
+  .bar-row .num{width:44px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;
+    font-size:13px}
+
+  .log-row{display:flex;align-items:center;gap:8px;padding:8px 0;font-size:12px;
+    border-bottom:1px solid #F3F4F6}
+  .log-row:last-child{border-bottom:0;padding-bottom:0}
+  .log-t{width:56px;color:var(--t3);font-size:11px;flex:0 0 auto}
+  .log-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    color:var(--t1);font-weight:500}
+  .log-d{font-weight:700;font-variant-numeric:tabular-nums;flex:0 0 auto;font-size:12.5px}
+  .log-d.gold{color:var(--gold)}
+  .log-d.silver{color:var(--silver)}
+  .log-x{color:var(--t3);font-size:11px;flex:0 0 auto;font-variant-numeric:tabular-nums}
+
+  /* ---------- 抽屉 ---------- */
+  .mask{position:fixed;inset:0;background:rgba(17,20,26,.42);z-index:40;opacity:0;pointer-events:none;transition:opacity .22s}
+  .mask.on{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#fff;border-radius:18px 18px 0 0;
+    max-height:92vh;overflow-y:auto;transform:translateY(102%);
+    transition:transform .26s cubic-bezier(.32,.72,0,1);padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  .sheet.on{transform:translateY(0)}
+  .sheet .wrap{max-width:520px;margin:0 auto;padding:0 16px}
+  .sh-bar{position:sticky;top:0;background:#fff;padding:11px 0 9px;display:flex;align-items:center;
+    border-bottom:1px solid var(--line);z-index:2}
+  .sh-bar h3{margin:0;font-size:16px;font-weight:700;flex:1}
+  .sh-close{border:0;background:#F2F4F7;color:var(--t2);width:29px;height:29px;border-radius:15px;font-size:14px}
+  .sh-save{border:0;background:var(--t1);color:#fff;font-size:13px;font-weight:600;padding:8px 15px;
+    border-radius:9px;margin-left:8px;font-family:inherit}
+
+  .fld{margin-top:12px}
+  .fld>label,.lbl-row label{display:block;font-size:12px;color:var(--t2);margin-bottom:5px;font-weight:500}
+  .lbl-row{display:flex;align-items:center;margin-bottom:5px}
+  .lbl-row label{margin:0;flex:1}
+  .link{border:0;background:none;color:var(--silver);font-size:12px;font-family:inherit;padding:0}
+  .fld input,.fld textarea{width:100%;border:1px solid var(--line);background:#FAFBFC;border-radius:10px;
+    padding:10px 12px;font-size:15px;color:var(--t1);font-family:inherit;outline:none}
+  .fld input:focus,.fld textarea:focus{border-color:#C9CED6;background:#fff}
+  .row2{display:flex;gap:9px}
+  .row2>*{flex:1}
+  .seg{display:flex;gap:5px;flex-wrap:wrap}
+  .seg button{flex:1;min-width:60px;border:1px solid var(--line);background:#FAFBFC;color:var(--t2);
+    font-size:13px;padding:9px 4px;border-radius:9px;font-family:inherit}
+  .seg button.on{background:var(--t1);color:#fff;border-color:var(--t1);font-weight:600}
+  .pchips{display:flex;flex-wrap:wrap;gap:6px}
+  .pchip{border:1px solid var(--line);background:#FAFBFC;color:var(--t2);font-size:13px;
+    padding:8px 13px;border-radius:9px;font-family:inherit}
+  .pchip.on{background:var(--t1);color:#fff;border-color:var(--t1);font-weight:600}
+  .pchip.add{border-style:dashed;color:var(--t1);font-weight:600}
+  .pchip .gdot{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:5px;
+    vertical-align:1px}
+  .del-btn{width:100%;margin-top:18px;border:1px solid #FBD5D5;background:#FFF5F5;color:#C81E1E;
+    font-size:14px;padding:11px;border-radius:11px;font-family:inherit}
+
+  .toast{position:fixed;left:50%;bottom:84px;transform:translate(-50%,10px);z-index:99;
+    background:rgba(20,24,33,.92);color:#fff;font-size:13px;padding:9px 15px;border-radius:20px;
+    opacity:0;pointer-events:none;transition:.2s;display:flex;align-items:center;gap:10px;
+    white-space:nowrap;max-width:92vw}
+  .toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .toast .undo{color:#FFD08A;font-weight:600;border-left:1px solid rgba(255,255,255,.25);padding-left:10px}
+
+  /* ---------- 底部弹层通用（键盘 / 选择 / 设备管理） ---------- */
+  .kpmask{position:fixed;inset:0;background:rgba(17,20,26,.38);z-index:54;opacity:0;
+    pointer-events:none;transition:opacity .2s}
+  .kpmask.on{opacity:1;pointer-events:auto}
+  .kpad,.pick{position:fixed;left:0;right:0;bottom:0;z-index:55;background:#F7F8FA;
+    border-radius:18px 18px 0 0;transform:translateY(102%);
+    transition:transform .24s cubic-bezier(.32,.72,0,1);
+    padding:10px 10px calc(18px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto;
+    max-height:86vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .kpad.on,.pick.on{transform:translateY(0)}
+  .kp-head{display:flex;align-items:center;padding:1px 6px 8px}
+  .kp-head .t{flex:1;font-size:13px;font-weight:600;color:var(--t1);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .kp-close{border:0;background:none;color:var(--t2);font-size:13.5px;font-family:inherit;padding:4px 2px 4px 12px}
+  .kp-val{background:#fff;border-radius:14px;margin:0 2px 9px;padding:6px 16px;text-align:right;
+    font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.35;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .kp-val.gold{color:var(--gold)}
+  .kp-val.silver{color:var(--silver)}
+  .kp-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .kp-keys button{height:47px;border:0;border-radius:11px;background:#fff;font-size:21px;font-weight:600;
+    font-family:inherit;color:var(--t1);box-shadow:0 1px 1px rgba(20,24,33,.05)}
+  .kp-keys button.fn{font-size:15px;background:#EBEEF2;color:var(--t2)}
+  .kp-keys button.ok{background:#141821;color:#fff;font-size:15px;font-weight:700}
+  .kp-keys button:active{transform:scale(.96)}
+
+  .opt-list{display:flex;flex-direction:column;gap:7px;padding:2px 2px 0}
+  .opt-list button{height:52px;border:1px solid var(--line);background:#fff;border-radius:12px;
+    font-size:15px;font-weight:600;font-family:inherit;color:var(--t1)}
+  .opt-list button.on{border:1.5px solid var(--t1);background:#F7F8FA}
+  .opt-list button:active{background:#F0F2F5}
+
+  .dev-row{display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;
+    padding:11px 12px;margin-bottom:7px}
+  .dev-row .n{flex:1;font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dev-row .cnt{font-size:11px;color:var(--t3);margin-right:2px}
+  .dev-row button{border:1px solid var(--line);background:#FAFBFC;color:var(--t2);font-size:12px;
+    padding:6px 10px;border-radius:8px;font-family:inherit}
+  .dev-row button.rm{color:#C81E1E;border-color:#FBD5D5;background:#FFF7F7}
+  .addline{width:100%;height:48px;border:1px dashed #D5D9E0;background:#fff;border-radius:12px;
+    font-size:14px;font-weight:600;color:var(--t1);font-family:inherit;margin-top:2px}
+
+  /* 输入弹窗 */
+  .askmask{position:fixed;inset:0;background:rgba(17,20,26,.45);z-index:56;opacity:0;
+    pointer-events:none;transition:opacity .18s}
+  .askmask.on{opacity:1;pointer-events:auto}
+  .ask{position:fixed;left:50%;top:50%;width:calc(100% - 40px);max-width:360px;z-index:57;
+    transform:translate(-50%,-50%) scale(.94);opacity:0;pointer-events:none;
+    background:#fff;border-radius:16px;padding:17px 16px 15px;
+    transition:.18s cubic-bezier(.32,.72,0,1);box-shadow:0 20px 50px -12px rgba(20,24,33,.4)}
+  .ask.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+  .ask h4{margin:0 0 12px;font-size:15px;font-weight:700}
+  .ask input{width:100%;border:1px solid var(--line);background:#FAFBFC;border-radius:10px;
+    padding:11px 12px;font-size:15px;color:var(--t1);font-family:inherit;outline:none}
+  .ask input:focus{border-color:#C9CED6;background:#fff}
+  .ask-btns{display:flex;gap:9px;margin-top:14px}
+  .ask-btns button{flex:1;height:44px;border-radius:11px;border:0;font-size:14.5px;
+    font-weight:600;font-family:inherit}
+  .ask-btns .c{background:#F2F4F7;color:var(--t2)}
+  .ask-btns .k{background:#141821;color:#fff}
+
+  .hues{display:flex;flex-wrap:wrap;justify-content:space-between;gap:7px;margin-top:14px}
+  .hue{width:30px;height:30px;border-radius:50%;border:2px solid transparent;padding:0}
+  .hue.on{border-color:#141821;box-shadow:0 0 0 2px #fff inset}
+
+  .grp-row{display:flex;align-items:center;gap:9px;background:#fff;border-radius:12px;
+    padding:11px 12px;margin-bottom:7px}
+  .grp-row .dot{width:12px;height:12px;border-radius:6px;flex:0 0 auto}
+  .grp-row .n{flex:1;font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .grp-row .cnt{font-size:11px;color:var(--t3)}
+  .mini{font-size:9px;font-weight:600;color:var(--t3);background:#F1F3F6;padding:1px 4px;
+    border-radius:3px;margin-left:2px}
+  .grp-row button{border:1px solid var(--line);background:#FAFBFC;color:var(--t2);font-size:12px;
+    padding:6px 10px;border-radius:8px;font-family:inherit}
+  .grp-row button.rm{color:#C81E1E;border-color:#FBD5D5;background:#FFF7F7}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="hd-row">
+      <div>
+        <div class="hd-title">账号计数器</div>
+        <div class="hd-sub" id="hdSub">加载中…</div>
+      </div>
+      <div class="hd-r">
+        <button class="qbtn gold" id="allGold"><i>金</i>+1</button>
+        <button class="qbtn swap" id="btnSwap">⇄ 交换</button>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </header>
+
+  <main id="view-list">
+    <div class="rows" id="rows"></div>
+  </main>
+
+  <main id="view-stat" style="display:none;padding:10px 12px 20px"></main>
+</div>
+
+<nav class="tabbar">
+  <div class="inner">
+    <div class="tab on" data-tab="list"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>账号</div>
+    <div class="tab" data-tab="selling"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1"/></svg></span>售卖中</div>
+    <div class="tab" data-tab="stat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>统计</div>
+    <div class="tab add" id="tabAdd"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>新建</div>
+  </div>
+</nav>
+
+<!-- 编辑抽屉 -->
+<div class="mask" id="mask"></div>
+<div class="sheet" id="sheet">
+  <div class="wrap">
+    <div class="sh-bar">
+      <h3 id="shTitle">新建账号</h3>
+      <button class="sh-save" id="shSave">保存</button>
+      <button class="sh-close" id="shClose">✕</button>
+    </div>
+    <div class="fld">
+      <label>游戏名 / 角色名</label>
+      <input id="fName" placeholder="如 AAA68886AAA">
+    </div>
+    <div class="fld">
+      <div class="lbl-row"><label>设备</label><button class="link" id="devManage">管理设备</button></div>
+      <div class="pchips" id="fDev"></div>
+    </div>
+    <div class="fld">
+      <label>登录账号（邮箱 / 手机号）</label>
+      <input id="fLogin" placeholder="如 danjs661@163.com" autocomplete="off">
+    </div>
+    <div class="fld">
+      <label>密码</label>
+      <input id="fPwd" placeholder="如 Qer123456" autocomplete="off">
+    </div>
+    <div class="fld row2">
+      <div><label>金</label><input id="fGold" type="number" inputmode="numeric" value="0"></div>
+      <div><label>银</label><input id="fSilver" type="number" inputmode="numeric" value="0"></div>
+    </div>
+    <div class="fld">
+      <div class="lbl-row"><label>状态</label><button class="link" id="stManage">管理状态</button></div>
+      <div class="seg" id="fStatus"></div>
+    </div>
+    <div class="fld">
+      <div class="lbl-row"><label>分组 / 归属</label><button class="link" id="grpManage">管理分组</button></div>
+      <div class="pchips" id="fGroup"></div>
+    </div>
+    <div class="fld">
+      <label>备注</label>
+      <input id="fRemark" placeholder="如 可卖改密 / 仅挂机">
+    </div>
+    <div class="fld">
+      <label>其它说明</label>
+      <textarea id="fNote" rows="2" placeholder="选填"></textarea>
+    </div>
+    <button class="del-btn" id="shDel">删除这个账号</button>
+  </div>
+</div>
+
+<!-- 数字键盘 -->
+<div class="kpmask" id="kpmask"></div>
+<div class="kpad" id="kpad">
+  <div class="kp-head">
+    <span class="t" id="kpTitle">编辑</span>
+    <button class="kp-close" id="kpCancel">取消</button>
+  </div>
+  <div class="kp-val gold" id="kpVal">0</div>
+  <div class="kp-keys" id="kpKeys">
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><button class="fn" data-k="del">⌫</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button class="fn" data-k="plus">+1</button>
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button class="fn" data-k="minus">−1</button>
+    <button data-k="00">00</button><button data-k="0">0</button><button class="fn" data-k="clear">清零</button><button class="ok" data-k="ok">确定</button>
+  </div>
+</div>
+
+<!-- 状态选择 -->
+<div class="kpmask" id="stmask"></div>
+<div class="pick" id="stpick">
+  <div class="kp-head">
+    <span class="t" id="stTitle">选择状态</span>
+    <button class="kp-close" id="stCancel">取消</button>
+  </div>
+  <div class="opt-list" id="stOpts">
+    <button data-v="farm">挂机中</button>
+    <button data-v="selling">售卖中</button>
+    <button data-v="idle">未上架</button>
+  </div>
+</div>
+
+<!-- 设备管理 -->
+<div class="kpmask" id="devmask"></div>
+<div class="pick" id="devpick">
+  <div class="kp-head">
+    <span class="t">管理设备</span>
+    <button class="kp-close" id="devCancel">关闭</button>
+  </div>
+  <div id="devList"></div>
+  <button class="addline" id="devAdd">＋ 新增设备</button>
+</div>
+
+<div class="askmask" id="askmask"></div>
+<div class="ask" id="ask">
+  <h4 id="askTitle">输入</h4>
+  <input id="askInput" autocomplete="off">
+  <div class="ask-btns">
+    <button class="c" id="askCancel">取消</button>
+    <button class="k" id="askOk">确定</button>
+  </div>
+</div>
+
+<!-- 分组新建/编辑 -->
+<div class="askmask" id="gmask"></div>
+<div class="ask" id="gask">
+  <h4 id="gTitle">新建分组</h4>
+  <input id="gInput" placeholder="分组名称" autocomplete="off">
+  <div class="hues" id="gHues"></div>
+  <div class="ask-btns">
+    <button class="c" id="gCancel">取消</button>
+    <button class="k" id="gOk">确定</button>
+  </div>
+</div>
+
+<!-- 分组管理 -->
+<div class="kpmask" id="grpmask"></div><div class="pick" id="grppick">
+  <div class="kp-head">
+    <span class="t">管理分组</span>
+    <button class="kp-close" id="grpCancel">关闭</button>
+  </div>
+  <div id="grpList"></div>
+  <button class="addline" id="grpAdd">＋ 新建分组</button>
+</div>
+
+<!-- 状态管理 -->
+<div class="kpmask" id="stmmask"></div>
+<div class="pick" id="stmpick">
+  <div class="kp-head">
+    <span class="t">管理状态</span>
+    <button class="kp-close" id="stmCancel">关闭</button>
+  </div>
+  <div id="stmList"></div>
+  <button class="addline" id="stmAdd">＋ 新建状态</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const S = { accounts: [], devices: [], groupHues: {}, statuses: [], logs: [], filter: 'all', editing: null };
+const fmt = v => (v === undefined || v === null || v === '') ? '' : String(v);
+
+const $ = s => document.querySelector(s);
+const el = (t, c, h) => { const n = document.createElement(t); if (c) n.className = c; if (h != null) n.innerHTML = h; return n; };
+
+function toast(msg, undoFn) {
+  const t = $('#toast');
+  t.innerHTML = '';
+  t.appendChild(el('span', '', esc(msg)));
+  if (undoFn) {
+    const u = el('span', 'undo', '撤销');
+    u.onclick = () => { t.classList.remove('on'); undoFn(); };
+    t.appendChild(u);
+  }
+  t.classList.add('on');
+  clearTimeout(t._tm);
+  t._tm = setTimeout(() => t.classList.remove('on'), undoFn ? 4000 : 1600);
+}
+
+/* ---------- 输入弹窗 ---------- */
+let askResolve = null;
+function askText(title, defVal, ph) {
+  return new Promise(res => {
+    askResolve = res;
+    $('#askTitle').textContent = title;
+    $('#askInput').value = defVal || '';
+    $('#askInput').placeholder = ph || '';
+    $('#askmask').classList.add('on');
+    $('#ask').classList.add('on');
+    setTimeout(() => { const i = $('#askInput'); i.focus(); i.select(); }, 200);
+  });
+}
+function closeAsk(v) {
+  $('#askmask').classList.remove('on');
+  $('#ask').classList.remove('on');
+  $('#askInput').blur();
+  const r = askResolve; askResolve = null;
+  if (r) r(v);
+}
+$('#askOk').onclick = () => { const v = $('#askInput').value.trim(); closeAsk(v || null); };
+$('#askCancel').onclick = () => closeAsk(null);
+$('#askmask').onclick = () => closeAsk(null);
+$('#askInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); const v = $('#askInput').value.trim(); closeAsk(v || null); }
+});
+
+/* ============ 数据层：电脑网页走 http，App 内走本地存储 ============ */
+const LOCAL_MODE = (location.protocol !== 'http:' && location.protocol !== 'https:')
+  || location.search.indexOf('local=1') >= 0;
+const LS_KEY = 'acc_counter_db_v1';
+let _db = null;
+
+function lsGet() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch (e) { return null; }
+}
+function lsPut(db) { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
+function nuid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+async function getDb() {
+  if (_db) return _db;
+  let db = lsGet();
+  if (!db || !Array.isArray(db.accounts)) {
+    try {
+      const r = await fetch('seed.json', { cache: 'no-store' });
+      db = await r.json();
+    } catch (e) {
+      db = {
+        accounts: [], logs: [], devices: ['mumu模拟器', '苹果'], groupColors: {},
+        statuses: [
+          { k: 'farm', name: '挂机中', color: '#0B9D6B', sell: false },
+          { k: 'selling', name: '售卖中', color: '#C2410C', sell: true },
+          { k: 'idle', name: '未上架', color: '#98A2B3', sell: false }
+        ]
+      };
+    }
+    db.logs = db.logs || [];
+    db.devices = db.devices || [];
+    db.statuses = db.statuses || [];
+    db.groupColors = db.groupColors || {};
+    lsPut(db);
+  }
+  _db = db;
+  return db;
+}
+function commit(db) { _db = db; lsPut(db); }
+
+async function localApi(path, opt) {
+  const db = await getDb();
+  const method = (opt && opt.method) || 'GET';
+  const b = opt && opt.body ? JSON.parse(opt.body) : {};
+  const parts = path.split('?')[0].split('/').filter(Boolean);
+  const now = Date.now();
+  const log = o => {
+    db.logs = db.logs || [];
+    db.logs.unshift(Object.assign({ id: nuid(), t: now }, o));
+    db.logs = db.logs.slice(0, 500);
+  };
+
+  if (path === '/api/state') {
+    return { accounts: db.accounts, devices: db.devices, groupColors: db.groupColors,
+      statuses: db.statuses, logs: db.logs || [] };
+  }
+  if (path === '/api/logs/clear') { db.logs = []; commit(db); return { ok: true }; }
+
+  if (path === '/api/transfer') {
+    const from = db.accounts.find(a => a.id === b.from);
+    const to = db.accounts.find(a => a.id === b.to);
+    const field = b.field === 'silver' ? 'silver' : 'gold';
+    const n = Math.max(1, parseInt(b.amount, 10) || 9);
+    const label = field === 'gold' ? '金' : '银';
+    if (!from || !to || from.id === to.id) return { error: '请选择两个不同的账号' };
+    const have = Number(from[field]) || 0;
+    if (have < n) return { error: (from.name || from.login) + ' 的' + label + '只有 ' + have + '，不够 ' + n };
+    from[field] = have - n;
+    to[field] = (Number(to[field]) || 0) + n;
+    log({ aid: from.id, name: (from.name || from.login) + ' → ' + (to.name || to.login),
+      field, delta: n, transfer: true });
+    commit(db);
+    return { ok: true, accounts: db.accounts };
+  }
+
+  if (path === '/api/statuses/save') {
+    const name = String(b.name || '').trim();
+    if (!name) return { error: '名称不能为空' };
+    const exist = db.statuses.find(s => s.k === String(b.old || '').trim());
+    if (exist) { exist.name = name; if (b.color) exist.color = b.color; }
+    else db.statuses.push({ k: 's' + nuid(), name, color: b.color || '#98A2B3', sell: false });
+    commit(db);
+    return { ok: true, statuses: db.statuses };
+  }
+  if (path === '/api/statuses/remove') {
+    const st = db.statuses.find(s => s.k === b.k);
+    if (!st) return { error: '状态不存在' };
+    if (st.sell) return { error: '「' + st.name + '」用于独立页面，不能删除' };
+    const used = db.accounts.filter(a => a.status === b.k).length;
+    if (used) return { error: '还有 ' + used + ' 个账号在用这个状态' };
+    db.statuses = db.statuses.filter(s => s.k !== b.k);
+    commit(db);
+    return { ok: true, statuses: db.statuses };
+  }
+
+  if (path === '/api/groups/save') {
+    const oldName = String(b.old || '').trim();
+    const name = String(b.name || '').trim();
+    if (!name) return { error: '名称不能为空' };
+    db.groupColors = db.groupColors || {};
+    if (oldName && oldName !== name) {
+      db.accounts.forEach(a => { if (a.group === oldName) a.group = name; });
+      delete db.groupColors[oldName];
+    }
+    if (b.color) db.groupColors[name] = b.color;
+    commit(db);
+    return { ok: true, accounts: db.accounts, groupColors: db.groupColors };
+  }
+  if (path === '/api/groups/remove') {
+    db.accounts.forEach(a => { if (a.group === b.name) a.group = ''; });
+    if (db.groupColors) delete db.groupColors[b.name];
+    commit(db);
+    return { ok: true, accounts: db.accounts, groupColors: db.groupColors || {} };
+  }
+
+  if (path === '/api/devices/add') {
+    const name = String(b.name || '').trim();
+    if (!name) return { error: '名称不能为空' };
+    db.devices = db.devices || [];
+    if (!db.devices.includes(name)) db.devices.push(name);
+    commit(db);
+    return { ok: true, devices: db.devices };
+  }
+  if (path === '/api/devices/rename') {
+    const from = String(b.from || '').trim(), to = String(b.to || '').trim();
+    if (!from || !to) return { error: '名称不能为空' };
+    db.devices = (db.devices || []).map(x => (x === from ? to : x));
+    db.accounts.forEach(a => { if (a.dev === from) a.dev = to; });
+    commit(db);
+    return { ok: true, devices: db.devices, accounts: db.accounts };
+  }
+  if (path === '/api/devices/remove') {
+    db.devices = (db.devices || []).filter(x => x !== b.name);
+    db.accounts.forEach(a => { if (a.dev === b.name) a.dev = ''; });
+    commit(db);
+    return { ok: true, devices: db.devices, accounts: db.accounts };
+  }
+
+  if (path === '/api/adjust-all') {
+    const field = b.field === 'silver' ? 'silver' : 'gold';
+    const delta = Number(b.delta) || 0;
+    const ids = Array.isArray(b.ids) && b.ids.length ? new Set(b.ids) : null;
+    let count = 0;
+    db.accounts.forEach(a => {
+      if (ids && !ids.has(a.id)) return;
+      const before = Number(a[field]) || 0;
+      const after = Math.max(0, before + delta);
+      if (after !== before) { a[field] = after; a.updated = now; count++; }
+    });
+    log({ aid: '*', name: '批量', field, delta, count });
+    commit(db);
+    return { ok: true, count, accounts: db.accounts };
+  }
+
+  if (path === '/api/accounts' && method === 'POST') {
+    const acc = Object.assign({
+      name: '', dev: '', login: '', pwd: '', gold: 0, silver: 0,
+      status: (db.statuses[0] || {}).k || 'idle', remark: '', group: '', note: '', items: []
+    }, b);
+    acc.id = nuid();
+    acc.updated = now;
+    db.accounts.push(acc);
+    commit(db);
+    return acc;
+  }
+
+  if (parts[1] === 'accounts' && parts[2]) {
+    const idx = db.accounts.findIndex(a => a.id === parts[2]);
+    if (idx < 0) return { error: 'not found' };
+    if (method === 'PUT') {
+      db.accounts[idx] = Object.assign(db.accounts[idx], b, { id: parts[2], updated: now });
+      commit(db);
+      return db.accounts[idx];
+    }
+    if (method === 'DELETE') {
+      const [removed] = db.accounts.splice(idx, 1);
+      commit(db);
+      return removed;
+    }
+    if (method === 'POST' && parts[3] === 'adjust') {
+      const field = b.field === 'silver' ? 'silver' : 'gold';
+      const delta = Number(b.delta) || 0;
+      const acc = db.accounts[idx];
+      const before = Number(acc[field]) || 0;
+      acc[field] = Math.max(0, before + delta);
+      acc.updated = now;
+      log({ aid: acc.id, name: acc.name || acc.login, field, delta: acc[field] - before,
+        before, after: acc[field] });
+      commit(db);
+      return acc;
+    }
+  }
+  return { error: 'bad api' };
+}
+
+async function api(path, opt) {
+  if (LOCAL_MODE) return localApi(path, opt);
+  const r = await fetch(path + (path.includes('?') ? '&' : '?') + 't=' + Date.now(),
+    Object.assign({ cache: 'no-store', headers: { 'Content-Type': 'application/json' } }, opt || {}));
+  return r.json();
+}
+
+async function reload() {
+  const d = await api('/api/state');
+  S.accounts = d.accounts || [];
+  S.devices = d.devices || [];
+  S.groupHues = d.groupColors || {};
+  S.statuses = d.statuses || [];
+  S.logs = d.logs || [];
+  render();
+}
+
+function sum(f) { return S.accounts.reduce((a, b) => a + (Number(b[f]) || 0), 0); }
+function groupNames() {
+  const set = new Set(S.accounts.map(a => a.group).filter(Boolean));
+  Object.keys(S.groupHues || {}).forEach(g => set.add(g));
+  return [...set];
+}
+/* 列表里设备名去掉“模拟器”后缀，省地方 */
+function devShort(n) { return String(n || '').replace(/\s*(模拟器|模拟)$/, ''); }
+
+/* 分组预设色：红橙黄绿青蓝紫（纯色） */
+const PALETTE = [
+  { c: '#E53935', t: '#B71C1C' }, // 红
+  { c: '#FB8C00', t: '#C65100' }, // 橙
+  { c: '#FDD835', t: '#8A6D00' }, // 黄
+  { c: '#43A047', t: '#1B5E20' }, // 绿
+  { c: '#00ACC1', t: '#00606B' }, // 青
+  { c: '#1E88E5', t: '#0D47A1' }, // 蓝
+  { c: '#8E24AA', t: '#4A148C' }  // 紫
+];
+const DEFAULT_COLOR = '#43A047';
+
+function hexRgb(h) {
+  const s = String(h || '').replace('#', '');
+  if (s.length !== 6) return { r: 67, g: 160, b: 71 };
+  return { r: parseInt(s.slice(0, 2), 16), g: parseInt(s.slice(2, 4), 16), b: parseInt(s.slice(4, 6), 16) };
+}
+function colorOf(g) {
+  const c = S.groupHues[g];
+  return (typeof c === 'string' && c.charAt(0) === '#') ? c : DEFAULT_COLOR;
+}
+function nextColor() {
+  const used = new Set(Object.values(S.groupHues || {}));
+  const free = PALETTE.find(p => !used.has(p.c));
+  return free ? free.c : PALETTE[Object.keys(S.groupHues || {}).length % PALETTE.length].c;
+}
+function gStyle(hex) {
+  const p = PALETTE.find(x => x.c === hex) || { c: hex, t: hex };
+  const { r, g, b } = hexRgb(p.c);
+  return 'background:rgba(' + r + ',' + g + ',' + b + ',.17);color:' + p.t;
+}
+
+function render() {
+  $('#hdSub').innerHTML = headHtml();
+  renderChips();
+  renderRows();
+  if (curTab === 'stat') renderStat();
+}
+
+function renderChips() {
+  if (curTab !== 'list') { $('#chips').style.display = 'none'; return; }
+  $('#chips').style.display = '';
+  const defs = [{ k: 'all', t: '全部' }].concat(
+    (S.statuses || []).filter(s => !s.sell).map(s => ({ k: s.k, t: s.name }))
+  );
+  if (!defs.some(d => d.k === S.filter)) S.filter = 'all';
+  const box = $('#chips'); box.innerHTML = '';
+  defs.forEach(d => {
+    const c = el('button', 'chip' + (S.filter === d.k ? ' on' : ''), esc(d.t));
+    c.onclick = () => { S.filter = d.k; render(); };
+    box.appendChild(c);
+  });
+}
+
+/* 当前页签下的账号（售卖中独立成页，不混在账号列表里） */
+function tabScoped() {
+  if (curTab === 'selling') return S.accounts.filter(a => a.status === 'selling');
+  if (curTab === 'stat') return S.accounts;
+  return S.accounts.filter(a => a.status !== 'selling');
+}
+
+function match(a) {
+  const f = S.filter;
+  if (f === 'all') return true;
+  if (f.startsWith('dev:')) return (a.dev || '') === f.slice(4);
+  if (f.startsWith('group:')) return a.group === f.slice(6);
+  return a.status === f;
+}
+
+function renderRows() {
+  const box = $('#rows'); box.innerHTML = '';
+  const list = tabScoped().filter(match);
+  if (!list.length) {
+    const eb = el('div', 'empty-box');
+    eb.appendChild(el('div', '', curTab === 'selling' ? '没有正在售卖的账号' : '这里还没有账号'));
+    if (LOCAL_MODE && curTab === 'list') {
+      const ib = el('button', 'import-btn', '从电脑导入');
+      ib.onclick = importFromPC;
+      eb.appendChild(ib);
+      eb.appendChild(el('div', 'empty-tip', '手机和电脑连同一个 WiFi，电脑上开着计数器即可'));
+    }
+    box.appendChild(eb);
+    return;
+  }
+  list.forEach(a => box.appendChild(rowOf(a)));
+}
+
+/* App 内：从电脑一次性导入数据（之后完全离线） */
+async function importFromPC() {
+  const addr = await askText('电脑地址', '10.4.37.63:8904', '如 192.168.1.5:8904');
+  if (!addr) return;
+  const host = addr.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  try {
+    toast('正在连接 ' + host + ' …');
+    const r = await fetch('http://' + host + '/api/state?t=' + Date.now(), { cache: 'no-store' });
+    const d = await r.json();
+    if (!Array.isArray(d.accounts)) throw new Error('format');
+    _db = d; lsPut(d);
+    S.logs = d.logs || [];
+    render();
+    toast('导入成功，共 ' + d.accounts.length + ' 个账号');
+  } catch (e) {
+    toast('连不上，确认电脑开着、同一 WiFi、地址端口没打错');
+  }
+}
+
+/* ---------- 交换模式：选两个卡片，把 9 金从第一个转到第二个 ---------- */
+const SWAP = { on: false, from: null, to: null, amount: 9 };
+
+function toggleSwap() {
+  if (!SWAP.on) {
+    SWAP.on = true; SWAP.from = null; SWAP.to = null;
+    $('#btnSwap').classList.add('on');
+    $('#btnSwap').textContent = '完成交换';
+    renderRows();
+    toast('交换模式：先点「转出」的账号，再点「转入」的账号');
+    return;
+  }
+  if (!SWAP.from || !SWAP.to) {
+    toast(SWAP.from ? '还要点一个账号作为转入方' : '先点一下要转出的账号');
+    return;
+  }
+  doSwap();
+}
+
+function pickSwap(a) {
+  if (!SWAP.from) SWAP.from = a.id;
+  else if (!SWAP.to && a.id !== SWAP.from) SWAP.to = a.id;
+  else { SWAP.from = a.id; SWAP.to = null; }
+  renderRows();
+  if (SWAP.from && SWAP.to) toast('两个账号都选好了，再点「完成交换」');
+  else if (SWAP.from) toast('已选转出方，再点一个转入方');
+}
+
+function endSwap() {
+  SWAP.on = false; SWAP.from = null; SWAP.to = null;
+  const b = $('#btnSwap');
+  if (b) { b.classList.remove('on'); b.textContent = '⇄ 交换'; }
+}
+
+async function doSwap() {
+  const a = S.accounts.find(x => x.id === SWAP.from);
+  const b = S.accounts.find(x => x.id === SWAP.to);
+  if (!a || !b) return;
+  const n = SWAP.amount;
+  const r = await api('/api/transfer', {
+    method: 'POST',
+    body: JSON.stringify({ from: a.id, to: b.id, field: 'gold', amount: n })
+  });
+  if (r.error) { toast(r.error); return; }
+  S.accounts = r.accounts || S.accounts;
+  endSwap();
+  render();
+  toast('已从 ' + (a.name || a.login) + ' 转 ' + n + ' 金给 ' + (b.name || b.login));
+  refreshLogs();
+}
+
+function rowOf(a) {
+  const r = el('div', 'row');
+  if (SWAP.on) {
+    if (SWAP.from === a.id) r.classList.add('sel-from');
+    else if (SWAP.to === a.id) r.classList.add('sel-to');
+    else if (SWAP.from || SWAP.to) r.classList.add('dimmed');
+    else r.classList.add('swapable');
+  }
+  r.onclick = () => { if (SWAP.on) pickSwap(a); else openSheet(a); };
+
+  /* 卡片染色：统一用状态色（浅色自动加深，避免看不出来） */
+  const tint = stColor(a.status);
+  if (tint) {
+    const { r: cr, g: cg, b: cb } = hexRgb(tint);
+    const lum = (0.299 * cr + 0.587 * cg + 0.114 * cb) / 255;
+    const alpha = lum > 0.72 ? 0.22 : (lum > 0.6 ? 0.13 : 0.08);
+    r.style.background = 'rgba(' + cr + ',' + cg + ',' + cb + ',' + alpha + ')';
+    r.style.boxShadow = 'inset 4px 0 0 ' + tint +
+      ', 0 1px 2px rgba(16,24,40,.05), 0 6px 16px -12px rgba(16,24,40,.18)';
+  }
+
+  const top = el('div', 'cr-top');
+  const topL = el('div', 'cr-top-l');
+  const st = el('div', 'cr-st', '<i class="dot"></i><span>' + esc(stName(a.status)) + '</span>');
+  st.style.color = readable(stColor(a.status));
+  st.querySelector('.dot').style.background = stColor(a.status);
+  st.dataset.id = a.id;
+  st.onclick = e => { e.stopPropagation(); if (SWAP.on) return pickSwap(a); openStatus(a); };
+  topL.appendChild(st);
+  if (a.group) {
+    const gs = el('span', 'g', esc(a.group));
+    gs.style.cssText = gStyle(colorOf(a.group));
+    topL.appendChild(gs);
+  }
+  top.appendChild(topL);
+
+  const cpy = el('div', 'cpy');
+  cpy.appendChild(cpButton(a, 'login', '号', '账号'));
+  cpy.appendChild(cpButton(a, 'pwd', '密', '密码'));
+  top.appendChild(cpy);
+  r.appendChild(top);
+
+  const loginTxt = a.login || a.name || '未命名';
+  r.appendChild(el('div', 'cr-login' + (a.login || a.name ? '' : ' empty'), esc(loginTxt)));
+
+  const bottom = el('div', 'cr-bottom');
+  const info = el('div', 'cr-info');
+  const nmRow = el('div', 'cr-name');
+  nmRow.appendChild(el('span', 'nm2', esc(a.name && a.name !== loginTxt ? a.name : '')));
+  info.appendChild(nmRow);
+  info.appendChild(el('div', 'cr-remark', esc(a.remark || (a.dev ? devShort(a.dev) : ''))));
+  bottom.appendChild(info);
+
+  const nums = el('div', 'cr-nums');
+  nums.appendChild(numCell(a, 'gold'));
+  nums.appendChild(numCell(a, 'silver'));
+  bottom.appendChild(nums);
+  r.appendChild(bottom);
+
+  return r;
+}
+
+function numCell(a, field) {
+  const d = el('div', 'num ' + field,
+    '<b>' + (a[field] ?? 0) + '</b><i>' + (field === 'gold' ? '金' : '银') + '</i>');
+  d.dataset.id = a.id;
+  d.onclick = e => { e.stopPropagation(); if (SWAP.on) return pickSwap(a); openKeypad(a, field); };
+  return d;
+}
+
+/* 复制/长按修改：号=登录账号，密=密码 */
+function cpButton(a, field, label, name) {
+  const isPwd = field === 'pwd';
+  const b = el('button', 'cp' + (isPwd && !a.pwd ? ' miss' : ''), label);
+  let timer = null, long = false, down = false;
+  const start = () => {
+    if (SWAP.on) return;
+    down = true; long = false;
+    timer = setTimeout(() => { long = true; editField(a, field, name); }, 550);
+  };
+  const end = e => {
+    if (!down) return;
+    down = false; clearTimeout(timer);
+    e.stopPropagation();
+    if (SWAP.on) { pickSwap(a); return; }
+    if (long) return;
+    if (isPwd) copy(a.pwd, '密码已复制', '这个账号没填密码');
+    else copy(a.login || a.name, '账号已复制', '这个账号没填账号');
+  };
+  b.addEventListener('pointerdown', start);
+  b.addEventListener('pointerup', end);
+  b.addEventListener('pointercancel', () => { clearTimeout(timer); down = false; });
+  b.addEventListener('contextmenu', e => e.preventDefault());
+  b.addEventListener('click', e => e.stopPropagation());
+  return b;
+}
+
+async function editField(a, field, name) {
+  const cur = field === 'pwd' ? (a.pwd || '') : (a.login || '');
+  const v = await askText('修改' + name, cur, '新的' + name);
+  if (v === null || v === cur) return;
+  a[field] = v;
+  await api('/api/accounts/' + a.id, { method: 'PUT', body: JSON.stringify({ [field]: v }) });
+  renderRows();
+  toast(name + '已修改');
+}
+
+function paintRow(a) {
+  const g = document.querySelector('.num.gold[data-id="' + a.id + '"] b');
+  const s = document.querySelector('.num.silver[data-id="' + a.id + '"] b');
+  if (g) g.textContent = a.gold ?? 0;
+  if (s) s.textContent = a.silver ?? 0;
+}
+function paintStatus(a) {
+  const st = document.querySelector('.cr-st[data-id="' + a.id + '"]');
+  if (st) {
+    st.style.color = readable(stColor(a.status));
+    st.innerHTML = '<i class="dot"></i><span>' + esc(stName(a.status)) + '</span>';
+    const dot = st.querySelector('.dot');
+    if (dot) dot.style.background = stColor(a.status);
+  }
+}
+/* 售卖中的账号单独管理，不计入总账金额 */
+function mainList() { return S.accounts.filter(a => a.status !== 'selling'); }
+
+function headHtml() {
+  const main = mainList();
+  const g = main.reduce((a, b) => a + (Number(b.gold) || 0), 0);
+  const sv = main.reduce((a, b) => a + (Number(b.silver) || 0), 0);
+  if (curTab === 'selling') {
+    const list = tabScoped();
+    const g2 = list.reduce((a, b) => a + (Number(b.gold) || 0), 0);
+    const s2 = list.reduce((a, b) => a + (Number(b.silver) || 0), 0);
+    return list.length + ' 个售卖中 · <b class="g1">金 ' + g2 + '</b> · <b class="g2">银 ' + s2 + '</b>';
+  }
+  const tail = ' · <b class="g1">金 ' + g + '</b> · <b class="g2">银 ' + sv + '</b>';
+  const sellN = S.accounts.length - main.length;
+  if (curTab === 'stat') {
+    return S.accounts.length + ' 个账号' + tail +
+      (sellN ? ' · ' + sellN + ' 个售卖中（不计入金额）' : '');
+  }
+  const farmN = main.filter(a => a.status === 'farm').length;
+  const farmTxt = stOf('farm') ? ' · ' + farmN + ' ' + stName('farm') : '';
+  return S.accounts.length + ' 个账号' + tail + farmTxt;
+}
+function paintHead() { $('#hdSub').innerHTML = headHtml(); }
+
+async function refreshLogs() {
+  const d = await api('/api/state');
+  S.logs = d.logs || [];
+  if (curTab === 'stat') renderStat();
+}
+
+function ago(t) {
+  const d = Date.now() - t;
+  if (d < 60000) return '刚刚';
+  if (d < 3600000) return Math.floor(d / 60000) + ' 分钟前';
+  if (d < 86400000) return Math.floor(d / 3600000) + ' 小时前';
+  const dt = new Date(t);
+  const p = n => String(n).padStart(2, '0');
+  return (dt.getMonth() + 1) + '-' + dt.getDate() + ' ' + p(dt.getHours()) + ':' + p(dt.getMinutes());
+}
+
+/* ---------- 状态（可自定义） ---------- */
+function stOf(k) { return (S.statuses || []).find(x => x.k === k); }
+function stName(k) { const s = stOf(k); return s ? s.name : '—'; }
+function stColor(k) { const s = stOf(k); return s ? (s.color || '#98A2B3') : '#98A2B3'; }
+/* 颜色太浅时（黄、亮青等）文字用深灰，否则看不清 */
+function readable(hex) {
+  const { r, g, b } = hexRgb(hex);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.68 ? '#667085' : hex;
+}
+
+let ST_A = null;
+function openStatus(a) {
+  ST_A = a;
+  $('#stTitle').textContent = (a.name || a.login || '未命名') + ' · 当前 ' + stName(a.status);
+  renderStOpts();
+  $('#stmask').classList.add('on'); $('#stpick').classList.add('on');
+}
+function renderStOpts() {
+  const box = $('#stOpts'); box.innerHTML = '';
+  (S.statuses || []).forEach(s => {
+    const cur = ST_A && ST_A.status === s.k;
+    const b = el('button', 'stopt' + (cur ? ' on' : ''), esc(s.name));
+    b.style.color = readable(s.color || '#98A2B3');
+    if (cur) b.style.borderColor = s.color || '#98A2B3';
+    b.onclick = async () => {
+      const a = ST_A; if (!a) return;
+      closeStatus();
+      if (a.status === s.k) return;
+      a.status = s.k; paintStatus(a); paintHead();
+      await api('/api/accounts/' + a.id, { method: 'PUT', body: JSON.stringify({ status: s.k }) });
+      toast('状态已改为 ' + s.name);
+      if (curTab !== 'stat') render();
+    };
+    box.appendChild(b);
+  });
+}
+function closeStatus() { $('#stmask').classList.remove('on'); $('#stpick').classList.remove('on'); }
+$('#stmask').onclick = closeStatus;
+$('#stCancel').onclick = closeStatus;
+
+/* ---------- 数字键盘 ---------- */
+let KP = { a: null, field: 'gold', buf: '0', fresh: true };
+function openKeypad(a, field) {
+  KP.a = a; KP.field = field; KP.buf = String(a[field] ?? 0); KP.fresh = true;
+  $('#kpTitle').textContent = (a.name || a.login || '未命名') + ' · ' + (field === 'gold' ? '金' : '银');
+  $('#kpVal').className = 'kp-val ' + field;
+  renderKp();
+  $('#kpmask').classList.add('on'); $('#kpad').classList.add('on');
+}
+function closeKeypad() { $('#kpmask').classList.remove('on'); $('#kpad').classList.remove('on'); }
+function renderKp() { $('#kpVal').textContent = KP.buf === '' ? '0' : KP.buf; }
+
+async function saveKp() {
+  const v = Math.max(0, parseInt(KP.buf || '0', 10) || 0);
+  const a = KP.a, field = KP.field;
+  const old = Number(a ? a[field] : 0) || 0;
+  closeKeypad();
+  if (!a || v === old) return;
+  a[field] = v;
+  paintRow(a); paintHead();
+  await api('/api/accounts/' + a.id + '/adjust', { method: 'POST', body: JSON.stringify({ field, delta: v - old }) });
+  toast((field === 'gold' ? '金' : '银') + '已改为 ' + v);
+  refreshLogs();
+}
+
+function kpPress(k) {
+  if (k === 'ok') return saveKp();
+  if (k === 'del') { KP.buf = KP.buf.slice(0, -1); KP.fresh = false; }
+  else if (k === 'clear') { KP.buf = '0'; KP.fresh = false; }
+  else if (k === 'plus') { KP.buf = String(Math.min(9999999, (Number(KP.buf) || 0) + 1)); KP.fresh = false; }
+  else if (k === 'minus') { KP.buf = String(Math.max(0, (Number(KP.buf) || 0) - 1)); KP.fresh = false; }
+  else if (k === '00') {
+    if (KP.fresh) { KP.buf = '0'; KP.fresh = false; }
+    else if (KP.buf !== '0' && KP.buf.length < 6) KP.buf += '00';
+  }
+  else if (/^[0-9]$/.test(k)) {
+    if (KP.fresh || KP.buf === '0') { KP.buf = k; KP.fresh = false; }
+    else if (KP.buf.length < 7) KP.buf += k;
+  }
+  renderKp();
+}
+$('#kpmask').onclick = closeKeypad;
+$('#kpCancel').onclick = closeKeypad;
+$('#kpKeys').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) kpPress(b.dataset.k);
+});
+
+/* ---------- 一键全部 +1 ---------- */
+async function adjustAll(field) {
+  const ids = tabScoped().filter(match).map(a => a.id);
+  if (!ids.length) return toast('当前没有账号');
+  const label = field === 'gold' ? '金' : '银';
+  const r = await api('/api/adjust-all', { method: 'POST', body: JSON.stringify({ field, delta: 1, ids }) });
+  if (r.accounts) S.accounts = r.accounts;
+  S.accounts.forEach(paintRow); paintHead();
+  toast('全部 ' + label + ' +1 · ' + (r.count || ids.length) + ' 个账号', async () => {
+    const r2 = await api('/api/adjust-all', { method: 'POST', body: JSON.stringify({ field, delta: -1, ids }) });
+    if (r2.accounts) S.accounts = r2.accounts;
+    S.accounts.forEach(paintRow); paintHead(); toast('已撤销');
+  });
+  refreshLogs();
+}
+
+function copy(txt, okMsg, emptyMsg) {
+  if (!txt) return toast(emptyMsg || '没有内容');
+  const ta = document.createElement('textarea');
+  ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast(okMsg || '已复制'); }
+  catch (e) { toast('复制失败，请长按选择'); }
+  document.body.removeChild(ta);
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+/* ---------- 统计 ---------- */
+function renderStat() {
+  const box = $('#view-stat'); box.innerHTML = '';
+  const all = mainList();
+  const total = all.length || 1;
+  const sellN = S.accounts.length - all.length;
+  const gSum = all.reduce((a, b) => a + (Number(b.gold) || 0), 0);
+  const sSum = all.reduce((a, b) => a + (Number(b.silver) || 0), 0);
+
+  const sum = el('div', 'stat-sum');
+  const mk = (n, label, cls) => {
+    const d = el('div', 'ss-item' + (cls ? ' ' + cls : ''));
+    d.appendChild(el('b', '', String(n)));
+    d.appendChild(el('span', '', label));
+    return d;
+  };
+  sum.appendChild(mk(S.accounts.length, '账号总数'));
+  sum.appendChild(mk(gSum, '金 合计', 'gold'));
+  sum.appendChild(mk(sSum, '银 合计', 'silver'));
+  box.appendChild(sum);
+
+  const note = sellN ? '（' + sellN + ' 个售卖中不计入）' : '';
+  [['gold', '金'], ['silver', '银']].forEach(([f, label]) => {
+    const rank = [...all].filter(a => (a[f] || 0) > 0)
+      .sort((a, b) => (b[f] || 0) - (a[f] || 0)).slice(0, 6);
+    const c = el('div', 'stat-card');
+    c.appendChild(el('div', 'stat-title', label + ' 排行 <i>' +
+      (rank.length ? '前 ' + rank.length + ' 名' : '') + note + '</i>'));
+    if (!rank.length) c.appendChild(el('div', 'empty-box', '暂无数据'));
+    const max = Math.max(1, ...rank.map(a => a[f] || 0));
+    rank.forEach((a, i) => {
+      const row = el('div', 'bar-row');
+      row.appendChild(el('div', 'rk', String(i + 1)));
+      row.appendChild(el('div', 'nm', esc(a.name || a.login)));
+      const tr = el('div', 'track');
+      const fl = el('div', 'fill' + (f === 'silver' ? ' s' : ''));
+      fl.style.width = Math.max(5, Math.round((a[f] || 0) / max * 100)) + '%';
+      tr.appendChild(fl); row.appendChild(tr);
+      row.appendChild(el('div', 'num', String(a[f] || 0)));
+      c.appendChild(row);
+    });
+    box.appendChild(c);
+  });
+
+  const c2 = el('div', 'stat-card');
+  c2.appendChild(el('div', 'stat-title', '状态分布 <i>' + note + '</i>'));
+  const stList = (S.statuses || []).filter(s => !s.sell);
+  if (!stList.length) c2.appendChild(el('div', 'empty-box', '暂无状态'));
+  stList.forEach(s => {
+    const n = all.filter(a => a.status === s.k).length;
+    const row = el('div', 'bar-row');
+    row.appendChild(el('div', 'rk', ''));
+    row.appendChild(el('div', 'nm', esc(s.name)));
+    const tr = el('div', 'track');
+    const fl = el('div', 'fill');
+    fl.style.background = s.color || '#C4CAD4';
+    fl.style.width = Math.round(n / total * 100) + '%';
+    tr.appendChild(fl); row.appendChild(tr);
+    row.appendChild(el('div', 'num', n + ''));
+    c2.appendChild(row);
+  });
+  box.appendChild(c2);
+
+  const c3 = el('div', 'stat-card');
+  const t3 = el('div', 'stat-title');
+  t3.appendChild(el('span', '', '最近变动'));
+  t3.appendChild(el('i', '', S.logs.length ? '共 ' + S.logs.length + ' 条' : '每次加减都会记录'));
+  if (S.logs.length) {
+    let armed = false;
+    const clr = el('button', 'clr', '清空');
+    clr.onclick = async () => {
+      if (!armed) {
+        armed = true; clr.textContent = '确认清空'; clr.classList.add('armed');
+        setTimeout(() => {
+          if (armed) { armed = false; clr.textContent = '清空'; clr.classList.remove('armed'); }
+        }, 3000);
+        return;
+      }
+      armed = false;
+      await api('/api/logs/clear', { method: 'POST' });
+      S.logs = [];
+      renderStat();
+      toast('已清空变动记录');
+    };
+    t3.appendChild(clr);
+  }
+  c3.appendChild(t3);
+  if (!S.logs.length) c3.appendChild(el('div', 'empty-box', '还没有变动记录'));
+  S.logs.slice(0, 20).forEach(l => {
+    const row = el('div', 'log-row');
+    row.appendChild(el('div', 'log-t', ago(l.t)));
+    row.appendChild(el('div', 'log-n', esc(l.aid === '*' ? '全部账号（' + (l.count || 0) + ' 个）' : (l.name || '—'))));
+    row.appendChild(el('div', 'log-d ' + (l.field === 'gold' ? 'gold' : 'silver'),
+      (l.delta > 0 ? '+' : '') + l.delta + ' ' + (l.field === 'gold' ? '金' : '银')));
+    if (l.before !== undefined) row.appendChild(el('div', 'log-x', l.before + '→' + l.after));
+    c3.appendChild(row);
+  });
+  box.appendChild(c3);
+}
+
+/* ---------- 设备管理 ---------- */
+function devCount(name) { return S.accounts.filter(a => a.dev === name).length; }
+
+function renderDevList() {
+  const box = $('#devList'); box.innerHTML = '';
+  if (!S.devices.length) box.appendChild(el('div', 'empty-box', '还没有设备'));
+  S.devices.forEach(name => {
+    const row = el('div', 'dev-row');
+    row.appendChild(el('div', 'n', esc(name)));
+    row.appendChild(el('div', 'cnt', devCount(name) + ' 个'));
+    const rb = el('button', '', '改名');
+    rb.onclick = async () => {
+      const nn = await askText('设备改名（所有用它的账号一起改）', name, '新名称');
+      if (!nn || nn === name) return;
+      const r = await api('/api/devices/rename', { method: 'POST', body: JSON.stringify({ from: name, to: nn }) });
+      if (r.accounts) S.accounts = r.accounts;
+      S.devices = r.devices || S.devices;
+      if (fDevVal === name) fDevVal = nn;
+      renderDevList(); renderDevChips(); renderChips(); renderRows();
+      toast('已改名');
+    };
+    const db = el('button', 'rm', '删除');
+    db.onclick = async () => {
+      const c = devCount(name);
+      if (!confirm('删除设备「' + name + '」？' + (c ? '这 ' + c + ' 个账号的设备会清空。' : ''))) return;
+      const r = await api('/api/devices/remove', { method: 'POST', body: JSON.stringify({ name }) });
+      if (r.accounts) S.accounts = r.accounts;
+      S.devices = r.devices || S.devices;
+      renderDevList(); renderChips(); renderRows();
+      toast('已删除');
+    };
+    row.appendChild(rb); row.appendChild(db);
+    box.appendChild(row);
+  });
+}
+
+$('#devManage').onclick = () => { renderDevList(); $('#devmask').classList.add('on'); $('#devpick').classList.add('on'); };
+$('#devmask').onclick = () => { $('#devmask').classList.remove('on'); $('#devpick').classList.remove('on'); };
+$('#devCancel').onclick = () => { $('#devmask').classList.remove('on'); $('#devpick').classList.remove('on'); };
+$('#devAdd').onclick = async () => {
+  const n = await askText('新设备名称', '', '如 雷电模拟器');
+  if (!n) return;
+  const r = await api('/api/devices/add', { method: 'POST', body: JSON.stringify({ name: n }) });
+  S.devices = r.devices || S.devices;
+  fDevVal = n;
+  renderDevList(); renderDevChips(); renderChips();
+  toast('已新增');
+};
+
+/* ---------- 抽屉 ---------- */
+let fDevVal = '', fGroupVal = '';
+
+function renderDevChips() {
+  const box = $('#fDev'); box.innerHTML = '';
+  S.devices.forEach(name => {
+    const b = el('button', 'pchip' + (fDevVal === name ? ' on' : ''), esc(name));
+    b.onclick = () => { fDevVal = (fDevVal === name ? '' : name); renderDevChips(); };
+    box.appendChild(b);
+  });
+  const none = el('button', 'pchip' + (fDevVal === '' ? ' on' : ''), '无');
+  none.onclick = () => { fDevVal = ''; renderDevChips(); };
+  box.appendChild(none);
+}
+
+function renderGroupChips() {
+  const box = $('#fGroup'); box.innerHTML = '';
+  const groups = groupNames();
+  if (fGroupVal && !groups.includes(fGroupVal)) groups.push(fGroupVal);
+  const none = el('button', 'pchip' + (fGroupVal === '' ? ' on' : ''), '无');
+  none.onclick = () => { fGroupVal = ''; renderGroupChips(); };
+  box.appendChild(none);
+  groups.forEach(g => {
+    const c = colorOf(g);
+    const b = el('button', 'pchip' + (fGroupVal === g ? ' on' : ''),
+      '<i class="gdot" style="background:' + c + '"></i>' + esc(g));
+    b.onclick = () => { fGroupVal = (fGroupVal === g ? '' : g); renderGroupChips(); };
+    box.appendChild(b);
+  });
+  const add = el('button', 'pchip add', '＋ 新建分组');
+  add.onclick = async () => {
+    const r = await askGroup('新建分组', '', nextColor(), '');
+    if (!r) return;
+    S.groupHues[r.name] = r.color;
+    fGroupVal = r.name;
+    renderGroupChips();
+  };
+  box.appendChild(add);
+}
+
+/* ---------- 分组弹窗（名称 + 颜色） ---------- */
+let gResolve = null, gColor = DEFAULT_COLOR;
+function askGroup(title, defName, defColor, oldName) {
+  return new Promise(res => {
+    gResolve = res; gColor = defColor;
+    $('#gTitle').textContent = title;
+    $('#gInput').value = defName || '';
+    $('#gInput').dataset.old = oldName || '';
+    renderHues();
+    $('#gmask').classList.add('on');
+    $('#gask').classList.add('on');
+    setTimeout(() => { const i = $('#gInput'); i.focus(); i.select(); }, 200);
+  });
+}
+function renderHues() {
+  const box = $('#gHues'); box.innerHTML = '';
+  PALETTE.forEach(p => {
+    const b = el('button', 'hue' + (gColor === p.c ? ' on' : ''));
+    b.style.background = p.c;
+    b.title = p.c;
+    b.onclick = () => { gColor = p.c; renderHues(); };
+    box.appendChild(b);
+  });
+}
+function closeGroup(v) {
+  $('#gmask').classList.remove('on');
+  $('#gask').classList.remove('on');
+  $('#gInput').blur();
+  const r = gResolve; gResolve = null;
+  if (r) r(v);
+}
+async function saveGroupAsk() {
+  const name = $('#gInput').value.trim();
+  const old = $('#gInput').dataset.old || '';
+  if (!name) return toast('请输入分组名称');
+  closeGroup({ name, color: gColor, old });
+}
+$('#gmask').onclick = () => closeGroup(null);
+$('#gCancel').onclick = () => closeGroup(null);
+$('#gOk').onclick = saveGroupAsk;
+$('#gInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); saveGroupAsk(); }
+});
+
+/* ---------- 分组管理 ---------- */
+function grpCount(name) { return S.accounts.filter(a => a.group === name).length; }
+function renderGrpList() {
+  const box = $('#grpList'); box.innerHTML = '';
+  const groups = groupNames();
+  if (!groups.length) box.appendChild(el('div', 'empty-box', '还没有分组'));
+  groups.forEach(g => {
+    const c = colorOf(g);
+    const row = el('div', 'grp-row');
+    const dot = el('div', 'dot');
+    dot.style.background = c;
+    row.appendChild(dot);
+    row.appendChild(el('div', 'n', esc(g)));
+    row.appendChild(el('div', 'cnt', grpCount(g) + ' 个'));
+    const eb = el('button', '', '编辑');
+    eb.onclick = async () => {
+      const r = await askGroup('编辑分组', g, c, g);
+      if (!r) return;
+      const res = await api('/api/groups/save', {
+        method: 'POST',
+        body: JSON.stringify({ old: r.old, name: r.name, color: r.color })
+      });
+      if (res.accounts) S.accounts = res.accounts;
+      S.groupHues = res.groupColors || S.groupHues;
+      if (fGroupVal === g) fGroupVal = r.name;
+      renderGrpList(); renderGroupChips(); renderChips(); renderRows();
+      toast('已保存');
+    };
+    const db = el('button', 'rm', '删除');
+    db.onclick = async () => {
+      const c = grpCount(g);
+      if (!confirm('删除分组「' + g + '」？' + (c ? '这 ' + c + ' 个账号会变成无分组。' : ''))) return;
+      const res = await api('/api/groups/remove', { method: 'POST', body: JSON.stringify({ name: g }) });
+      if (res.accounts) S.accounts = res.accounts;
+      S.groupHues = res.groupColors || S.groupHues;
+      if (fGroupVal === g) fGroupVal = '';
+      renderGrpList(); renderGroupChips(); renderChips(); renderRows();
+      toast('已删除');
+    };
+    row.appendChild(eb); row.appendChild(db);
+    box.appendChild(row);
+  });
+}
+$('#grpManage').onclick = () => { renderGrpList(); $('#grpmask').classList.add('on'); $('#grppick').classList.add('on'); };
+$('#grpmask').onclick = () => { $('#grpmask').classList.remove('on'); $('#grppick').classList.remove('on'); };
+$('#grpCancel').onclick = () => { $('#grpmask').classList.remove('on'); $('#grppick').classList.remove('on'); };
+$('#grpAdd').onclick = async () => {
+  const r = await askGroup('新建分组', '', nextColor(), '');
+  if (!r) return;
+  const res = await api('/api/groups/save', { method: 'POST', body: JSON.stringify({ old: '', name: r.name, color: r.color }) });
+  if (res.accounts) S.accounts = res.accounts;
+  S.groupHues = res.groupColors || S.groupHues;
+  renderGrpList(); renderGroupChips(); renderChips();
+  toast('已新建');
+};
+
+/* ---------- 状态管理 ---------- */
+function renderStatusSeg(v) {
+  const box = $('#fStatus'); if (!box) return;
+  box.innerHTML = '';
+  (S.statuses || []).forEach(s => {
+    const b = el('button', '', esc(s.name));
+    b.dataset.v = s.k;
+    if (s.k === v) b.classList.add('on');
+    box.appendChild(b);
+  });
+}
+function renderStmList() {
+  const box = $('#stmList'); box.innerHTML = '';
+  (S.statuses || []).forEach(s => {
+    const n = S.accounts.filter(a => a.status === s.k).length;
+    const row = el('div', 'grp-row');
+    const dot = el('div', 'dot');
+    dot.style.background = s.color || '#98A2B3';
+    row.appendChild(dot);
+    row.appendChild(el('div', 'n', esc(s.name) + (s.sell ? ' <span class="mini">独立页</span>' : '')));
+    row.appendChild(el('div', 'cnt', n + ' 个'));
+
+    const eb = el('button', '', '编辑');
+    eb.onclick = async () => {
+      const r = await askGroup('编辑状态', s.name, s.color, s.k);
+      if (!r) return;
+      const res = await api('/api/statuses/save', {
+        method: 'POST', body: JSON.stringify({ old: s.k, name: r.name, color: r.color })
+      });
+      if (res.error) return toast(res.error);
+      S.statuses = res.statuses;
+      afterStatusChange();
+      toast('已保存');
+    };
+    const db = el('button', 'rm', '删除');
+    db.onclick = async () => {
+      const res = await api('/api/statuses/remove', { method: 'POST', body: JSON.stringify({ k: s.k }) });
+      if (res.error) return toast(res.error);
+      S.statuses = res.statuses;
+      afterStatusChange();
+      toast('已删除');
+    };
+    row.appendChild(eb); row.appendChild(db);
+    box.appendChild(row);
+  });
+}
+function afterStatusChange() {
+  renderStmList();
+  renderStatusSeg(getSeg('#fStatus'));
+  renderChips(); renderRows(); paintHead();
+  if (curTab === 'stat') renderStat();
+}
+$('#stManage').onclick = () => {
+  renderStmList();
+  $('#stmmask').classList.add('on'); $('#stmpick').classList.add('on');
+};
+$('#stmmask').onclick = () => { $('#stmmask').classList.remove('on'); $('#stmpick').classList.remove('on'); };
+$('#stmCancel').onclick = () => { $('#stmmask').classList.remove('on'); $('#stmpick').classList.remove('on'); };
+$('#stmAdd').onclick = async () => {
+  const r = await askGroup('新建状态', '', '#1E88E5', '');
+  if (!r) return;
+  const res = await api('/api/statuses/save', {
+    method: 'POST', body: JSON.stringify({ old: '', name: r.name, color: r.color })
+  });
+  if (res.error) return toast(res.error);
+  S.statuses = res.statuses;
+  afterStatusChange();
+  toast('已新建');
+};
+
+function openSheet(a) {
+  S.editing = a || null;
+  $('#shTitle').textContent = a ? '编辑账号' : '新建账号';
+  $('#fName').value = a ? (a.name || '') : '';
+  $('#fLogin').value = a ? (a.login || '') : '';
+  $('#fPwd').value = a ? (a.pwd || '') : '';
+  $('#fGold').value = a ? (a.gold || 0) : 0;
+  $('#fSilver').value = a ? (a.silver || 0) : 0;
+  $('#fRemark').value = a ? (a.remark || '') : '';
+  $('#fNote').value = a ? (a.note || '') : '';
+  fDevVal = a ? (a.dev || '') : (S.devices[0] || '');
+  fGroupVal = a ? (a.group || '') : '';
+  renderDevChips(); renderGroupChips();
+  renderStatusSeg(a ? (a.status || 'idle') : 'idle');
+  $('#shDel').style.display = a ? 'block' : 'none';
+  $('#mask').classList.add('on'); $('#sheet').classList.add('on');
+}
+function closeSheet() { $('#mask').classList.remove('on'); $('#sheet').classList.remove('on'); }
+function setSeg(sel, v) { document.querySelectorAll(sel + ' button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); }
+function getSeg(sel) { const b = document.querySelector(sel + ' button.on'); return b ? b.dataset.v : ''; }
+document.querySelectorAll('.seg').forEach(seg => {
+  seg.addEventListener('click', e => {
+    if (e.target.tagName !== 'BUTTON') return;
+    seg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+    e.target.classList.add('on');
+  });
+});
+
+$('#mask').onclick = closeSheet;
+$('#shClose').onclick = closeSheet;
+$('#tabAdd').onclick = () => openSheet(null);
+$('#allGold').onclick = () => adjustAll('gold');
+$('#btnSwap').onclick = () => toggleSwap();
+
+function syncHeaderH() {
+  const h = $('header').offsetHeight;
+  document.documentElement.style.setProperty('--hh', h + 'px');
+}
+window.addEventListener('resize', syncHeaderH);
+setTimeout(syncHeaderH, 60);
+
+$('#shSave').onclick = async () => {
+  const data = {
+    name: $('#fName').value.trim(),
+    dev: fDevVal,
+    login: $('#fLogin').value.trim(),
+    pwd: $('#fPwd').value.trim(),
+    gold: Number($('#fGold').value) || 0,
+    silver: Number($('#fSilver').value) || 0,
+    status: getSeg('#fStatus') || 'idle',
+    group: fGroupVal,
+    remark: $('#fRemark').value.trim(),
+    note: $('#fNote').value.trim()
+  };
+  if (!data.login && !data.name) return toast('至少填游戏名或账号');
+  // 分组连同颜色一起落库
+  if (data.group) {
+    const g = await api('/api/groups/save', {
+      method: 'POST',
+      body: JSON.stringify({ old: '', name: data.group, color: colorOf(data.group) })
+    });
+    if (g.groupColors) S.groupHues = g.groupColors;
+  }
+  if (S.editing) await api('/api/accounts/' + S.editing.id, { method: 'PUT', body: JSON.stringify(data) });
+  else await api('/api/accounts', { method: 'POST', body: JSON.stringify(data) });
+  closeSheet(); toast('已保存'); reload();
+};
+
+$('#shDel').onclick = async () => {
+  if (!S.editing) return;
+  if (!confirm('确定删除「' + (S.editing.name || S.editing.login) + '」？')) return;
+  await api('/api/accounts/' + S.editing.id, { method: 'DELETE' });
+  closeSheet(); toast('已删除'); reload();
+};
+
+/* ---------- tab ---------- */
+let curTab = 'list';
+document.querySelectorAll('.tab[data-tab]').forEach(t => {
+  t.onclick = () => {
+    curTab = t.dataset.tab;
+    S.filter = 'all';
+    endSwap();
+    document.querySelectorAll('.tab[data-tab]').forEach(x => x.classList.toggle('on', x === t));
+    const isStat = curTab === 'stat';
+    $('#view-list').style.display = isStat ? 'none' : '';
+    $('#view-stat').style.display = isStat ? '' : 'none';
+    render();
+  };
+});
+
+/* 禁止双指缩放（iOS Safari 会忽略 user-scalable=no，必须靠 JS） */
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('gesturechange', e => e.preventDefault());
+document.addEventListener('gestureend', e => e.preventDefault());
+document.addEventListener('touchmove', e => {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+/* 交换模式下点空白处取消（卡片、按钮、筛选、弹层以外都算空白） */
+document.addEventListener('click', e => {
+  if (!SWAP.on) return;
+  if (e.target.closest('.row, .qbtn, .chip, .tabbar, .pick, .kpad, .sheet, .ask, .askmask, .kpmask, .mask, .toast')) return;
+  endSwap();
+  renderRows();
+  toast('已退出交换');
+});
+
+reload();
+</script>
+</body>
+</html>

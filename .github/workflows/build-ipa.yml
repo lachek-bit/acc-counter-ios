@@ -1,0 +1,108 @@
+name: build-ipa
+
+on:
+  push:
+    branches: [ acc-counter, main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xcodebuild -showsdks | grep -i "ios" | head -5
+
+      # 锁 2.42.0：新版 XcodeGen 会生成 objectVersion 77 的工程格式，macos-14 上的 Xcode 15.4 读不了
+      - name: Install XcodeGen
+        run: |
+          set -e
+          XG=""
+          rm -rf /tmp/xg && mkdir -p /tmp/xg
+          if curl -sSL --retry 3 --max-time 180 -o /tmp/xcodegen.zip \
+               https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip; then
+            unzip -q -o /tmp/xcodegen.zip -d /tmp/xg || true
+            XG="$(find /tmp/xg -type f -name xcodegen 2>/dev/null | head -1)"
+            if [ -n "$XG" ]; then chmod +x "$XG"; fi
+          fi
+          if [ -z "$XG" ]; then
+            echo "::warning::固定版本不可用，回退 brew"
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+            XG="$(command -v xcodegen)"
+          fi
+          echo "XCODEGEN=$XG" >> "$GITHUB_ENV"
+          "$XG" --version
+
+      - name: Generate Xcode project
+        run: |
+          set -e
+          "$XCODEGEN" generate
+          if grep -q "objectVersion = 77;" AccCounter.xcodeproj/project.pbxproj; then
+            sed -i '' 's/objectVersion = 77;/objectVersion = 56;/' AccCounter.xcodeproj/project.pbxproj
+          fi
+          grep -m1 objectVersion AccCounter.xcodeproj/project.pbxproj
+          echo "--- 资源是否进包 ---"
+          grep -c "index.html in Resources" AccCounter.xcodeproj/project.pbxproj || true
+          grep -c "seed.json in Resources" AccCounter.xcodeproj/project.pbxproj || true
+
+      - name: Build (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project AccCounter.xcodeproj \
+            -scheme AccCounter \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build > build.log 2>&1 \
+          || { echo "===== 构建失败 ====="; \
+               grep -nE "error:|fatal error:" build.log | head -120; \
+               echo "----- 日志末尾 -----"; \
+               tail -60 build.log; exit 1; }
+          echo "===== 构建成功 ====="
+          tail -6 build.log
+
+      - name: Package unsigned IPA
+        run: |
+          set -e
+          APP=build/Build/Products/Release-iphoneos/AccCounter.app
+          test -d "$APP" || { echo "找不到 .app"; ls -R build/Build/Products || true; exit 1; }
+          echo "--- 包内资源 ---"
+          ls "$APP" | head -20
+          test -f "$APP/index.html" || { echo "index.html 没进包！"; exit 1; }
+          rm -rf Payload AccCounter-unsigned.ipa
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry AccCounter-unsigned.ipa Payload
+          ls -lh AccCounter-unsigned.ipa
+          unzip -l AccCounter-unsigned.ipa | head -22
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AccCounter-unsigned-ipa
+          path: AccCounter-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Upload build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore

@@ -1,0 +1,29 @@
+{
+  "accounts": [],
+  "logs": [],
+  "devices": [
+    "mumu模拟器",
+    "苹果"
+  ],
+  "groupColors": {},
+  "statuses": [
+    {
+      "k": "farm",
+      "name": "挂机中",
+      "color": "#0B9D6B",
+      "sell": false
+    },
+    {
+      "k": "selling",
+      "name": "售卖中",
+      "color": "#C2410C",
+      "sell": true
+    },
+    {
+      "k": "idle",
+      "name": "未上架",
+      "color": "#98A2B3",
+      "sell": false
+    }
+  ]
+}

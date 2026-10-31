@@ -1,0 +1,15 @@
+# macOS / Xcode
+.DS_Store
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+AccCounter.xcodeproj/project.xcworkspace/
+AccCounter.xcodeproj/xcuserdata/
+
+# 产物
+*.ipa
+Payload/
+
+# 构建日志
+build.log
