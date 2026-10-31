@@ -135,7 +135,16 @@
   .empty-box .import-btn{margin-top:14px;border:0;border-radius:11px;background:#101828;color:#fff;
     font-size:13.5px;font-weight:600;font-family:inherit;padding:11px 22px}
   .empty-box .import-btn:active{transform:scale(.96)}
+  .empty-box .import-btn.ghost{background:#fff;color:var(--t2);
+    box-shadow:inset 0 0 0 1px #E4E7EC;margin-left:8px}
   .empty-box .empty-tip{font-size:11px;color:#B0B8C5;margin-top:10px}
+
+  .dm-row{display:flex;gap:9px}
+  .dm-btn{flex:1;border:0;border-radius:11px;background:#F2F4F7;color:var(--t1);
+    font-size:13px;font-weight:600;font-family:inherit;padding:11px 0}
+  .dm-btn.primary{background:#101828;color:#fff}
+  .dm-btn:active{transform:scale(.97)}
+  .dm-tip{font-size:11px;color:var(--t3);margin-top:9px;line-height:1.5}
 
   /* ---------- 底部按钮栏 ---------- */
   .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#FBFCFD;
@@ -860,15 +869,71 @@ function renderRows() {
     const eb = el('div', 'empty-box');
     eb.appendChild(el('div', '', curTab === 'selling' ? '没有正在售卖的账号' : '这里还没有账号'));
     if (LOCAL_MODE && curTab === 'list') {
-      const ib = el('button', 'import-btn', '从电脑导入');
-      ib.onclick = importFromPC;
-      eb.appendChild(ib);
-      eb.appendChild(el('div', 'empty-tip', '手机和电脑连同一个 WiFi，电脑上开着计数器即可'));
+      const b1 = el('button', 'import-btn', '从文件导入');
+      b1.onclick = importFromFile;
+      eb.appendChild(b1);
+      const b2 = el('button', 'import-btn ghost', '从电脑导入');
+      b2.onclick = importFromPC;
+      eb.appendChild(b2);
+      eb.appendChild(el('div', 'empty-tip', '文件导入：把导出的 JSON 发到手机，用文件 App 选它'));
     }
     box.appendChild(eb);
     return;
   }
   list.forEach(a => box.appendChild(rowOf(a)));
+}
+
+/* App 内：从文件导入 / 导出备份 */
+function importFromFile() {
+  const h = window.webkit && window.webkit.messageHandlers;
+  if (h && h.pickFile) { h.pickFile.postMessage('pick'); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.json,application/json,text/plain';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0];
+    if (f) window.__IMPORT_DATA__(await f.text());
+  };
+  inp.click();
+}
+
+window.__IMPORT_DATA__ = function (txt) {
+  try {
+    const d = JSON.parse(txt);
+    if (!Array.isArray(d.accounts)) throw new Error('bad');
+    d.logs = d.logs || [];
+    d.devices = d.devices || [];
+    d.statuses = d.statuses || [];
+    d.groupColors = d.groupColors || {};
+    commit(d);
+    S.accounts = d.accounts;
+    S.devices = d.devices;
+    S.statuses = d.statuses;
+    S.groupHues = d.groupColors;
+    S.logs = d.logs;
+    render();
+    toast('导入成功，共 ' + d.accounts.length + ' 个账号');
+  } catch (e) {
+    toast('文件格式不对，请选导出的 JSON 文件');
+  }
+};
+
+function exportData() {
+  const db = _db || {
+    accounts: S.accounts, devices: S.devices, groupColors: S.groupHues,
+    statuses: S.statuses, logs: S.logs
+  };
+  const json = JSON.stringify(db, null, 2);
+  const h = window.webkit && window.webkit.messageHandlers;
+  if (h && h.exportData) { h.exportData.postMessage(json); return; }
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '账号计数器.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  toast('已导出');
 }
 
 /* App 内：从电脑一次性导入数据（之后完全离线） */
@@ -1318,6 +1383,18 @@ function renderStat() {
     c3.appendChild(row);
   });
   box.appendChild(c3);
+
+  const c4 = el('div', 'stat-card');
+  c4.appendChild(el('div', 'stat-title', '数据管理'));
+  const row4 = el('div', 'dm-row');
+  const be = el('button', 'dm-btn', '导出备份');
+  be.onclick = exportData;
+  const bi = el('button', 'dm-btn primary', '从文件导入');
+  bi.onclick = importFromFile;
+  row4.appendChild(be); row4.appendChild(bi);
+  c4.appendChild(row4);
+  c4.appendChild(el('div', 'dm-tip', '导出的 JSON 发到别的设备导入，数据完全一致'));
+  box.appendChild(c4);
 }
 
 /* ---------- 设备管理 ---------- */
