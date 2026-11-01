@@ -58,6 +58,17 @@ jobs:
           grep -c "index.html in Resources" AccCounter.xcodeproj/project.pbxproj || true
           grep -c "seed.json in Resources" AccCounter.xcodeproj/project.pbxproj || true
 
+      # 保险：iOS 里的 seed 必须是空数据，绝不能把真实账号带进公开仓库
+      - name: Guard - seed must be empty
+        run: |
+          N=$(node -e "const d=require('./AccCounter/Resources/seed.json');console.log((d.accounts||[]).length)")
+          echo "seed.json 里的账号数: $N"
+          if [ "$N" != "0" ]; then
+            echo "::error::ios 的 seed.json 有 $N 个账号！公开仓库不能带真实数据，改成 [] 再推"
+            exit 1
+          fi
+          echo "OK：seed 是空的"
+
       - name: Build (unsigned)
         run: |
           set -o pipefail
